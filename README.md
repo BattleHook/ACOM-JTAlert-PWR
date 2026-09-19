@@ -128,6 +128,7 @@ ACOM Director Plus displays Forward Power in two places. The OCR helper reads th
 
 The tested capture rectangle starts at approximately window-relative x=12, y=318 and is 305 x 23 pixels wide. If the ACOM layout, window scaling, or display scaling changes, this rectangle may need adjustment in `Read-ACOM-Power.ps1` and the AHK capture coordinates.
 
+Required ACOM Director Plus configuration: enable Keep on top so the OCR capture remains reliable when other windows are used.
 
 ## JTAlert Log Fields visibility requirement
 
