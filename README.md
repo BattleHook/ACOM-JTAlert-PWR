@@ -118,3 +118,12 @@ Run it with AutoHotkey v2, not v1. Keep the `.ps1` helper beside the `.ahk` file
 ## Safety and limitations
 
 The confirmed workflow only reads the displayed ACOM Forward Power value and writes text to JTAlert. It does not control transmitter power, change radio settings, or initiate a transmission. OCR accuracy depends on the display, window layout, Windows scaling, and application versions.
+
+
+## Which ACOM value is read?
+
+ACOM Director Plus displays Forward Power in two places. The OCR helper reads the **lower detailed `FORWARD POWER` field** in the status table, highlighted in the image below. It does not read the upper bar-gauge value.
+
+![ACOM Director Plus Forward Power field](ACOM-Director-Plus-Forward-Power.png)
+
+The tested capture rectangle starts at approximately window-relative x=12, y=318 and is 305 x 23 pixels wide. If the ACOM layout, window scaling, or display scaling changes, this rectangle may need adjustment in `Read-ACOM-Power.ps1` and the AHK capture coordinates.
