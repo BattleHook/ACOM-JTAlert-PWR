@@ -71,7 +71,7 @@ The confirmed output target is:
 - Window: `ahk_exe JTAlertV2.exe`
 - Control: `Edit18`
 
-The script uses `ControlSetText` to write the average. If JTAlert changes its control layout or the PWR field is no longer `Edit18`, update `WritePowerToJTAlert()` and retest.
+The script uses `ControlSetText` to write the average. If the JTAlert Log Fields layout changes, confirm which control contains the PWR field. Update the `Edit18` target in `WritePowerToJTAlert()` if necessary, then retest with the Log Fields window visible. its control layout or the PWR field is no longer `Edit18`, update `WritePowerToJTAlert()` and retest.
 
 ## WSJT-X status: not verified
 
