@@ -23,14 +23,14 @@ The ACOM and JTAlert product versions were not pinned. The script depends on the
 
 Keep these files together:
 
-- `TX PWR ACOM to WSJTXLOG.ahk` - main AutoHotkey v2 script.
+- `ACOM-JTAlert-PWR.ahk` - main AutoHotkey v2 script.
 - `Read-ACOM-Power.ps1` - screenshot capture and Tesseract OCR helper.
 
 1. Install AutoHotkey v2, ACOM Director Plus, JTAlert V2, and Tesseract OCR.
 2. Copy both project files to one directory.
 3. Start ACOM Director Plus and JTAlert V2.
 4. Make sure the ACOM Forward Power display is visible and readable at least once.
-5. Run `TX PWR ACOM to WSJTXLOG.ahk` with AutoHotkey v2.
+5. Run `ACOM-JTAlert-PWR.ahk` with AutoHotkey v2.
 6. Transmit and confirm that JTAlert's PWR field changes after the transmission ends.
 
 The script uses OCR because the tested ACOM controls returned empty text values. It reads the displayed pixels instead.
