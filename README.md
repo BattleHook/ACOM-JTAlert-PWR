@@ -10,7 +10,7 @@ The working test setup used:
 
 - Windows desktop environment.
 - AutoHotkey v2.0, with `#Requires AutoHotkey v2.0`.
-- AutoHotkey executable: `C:\Program Files\AutoHotkey\v2\AutoHotkey.exe`.
+- AutoHotkey executable: `C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe`.
 - Optional compiler: `C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe`.
 - ACOM Director Plus process: `ACOM Director Plus.exe`.
 - JTAlert V2 process: `JTAlertV2.exe`.
@@ -136,3 +136,14 @@ The confirmed test was performed with the JTAlert **Log Fields** window visible,
 The JTAlert Log Fields window being hidden or closed has **not been tested**. The documented working configuration therefore requires the Log Fields window to remain visible. The accurate failure description is: **the JTAlert Log Fields `PWR` field is not rewritten**.
 
 ![JTAlert Log Fields window](JTAlert-Log-Fields-PWR.png)
+
+
+## AutoHotkey Dash launch setting
+
+The tested setup used AutoHotkey `2.0.28`. In AutoHotkey Dash, open **Launch settings** and select **Run all scripts with a specific interpreter**. Set the interpreter to:
+
+`C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe`
+
+This setting was required for the renamed script to launch correctly in the tested environment. The reference image is shown below.
+
+![AutoHotkey Dash launch settings](AutoHotkey-Launch-Settings.JPG)
