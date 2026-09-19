@@ -127,3 +127,12 @@ ACOM Director Plus displays Forward Power in two places. The OCR helper reads th
 ![ACOM Director Plus Forward Power field](ACOM-Director-Plus-Forward-Power.png)
 
 The tested capture rectangle starts at approximately window-relative x=12, y=318 and is 305 x 23 pixels wide. If the ACOM layout, window scaling, or display scaling changes, this rectangle may need adjustment in `Read-ACOM-Power.ps1` and the AHK capture coordinates.
+
+
+## JTAlert Log Fields visibility requirement
+
+The confirmed test was performed with the JTAlert **Log Fields** window visible, as shown below. The script writes to the `PWR` field in that window, identified during testing as control `Edit18`.
+
+The JTAlert Log Fields window being hidden or closed has **not been tested**. The documented working configuration therefore requires the Log Fields window to remain visible. The accurate failure description is: **the JTAlert Log Fields `PWR` field is not rewritten**.
+
+![JTAlert Log Fields window](JTAlert-Log-Fields-PWR.png)
