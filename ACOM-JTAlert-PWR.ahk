@@ -1,7 +1,9 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 #SingleInstance Force
 
 DEBUG := false
+; Script version (updated by update-version.ps1). Default placeholder.
+SCRIPT_VERSION := "efc2b50-dirty"
 SetTimer(CheckLogWindow, 1000)
 
 if DEBUG
@@ -12,6 +14,9 @@ if DEBUG
 ^!t::TestTxPowerEntry()
 ^!d::DumpAcomControls()
 #HotIf
+
+; Manual toggle to pause/resume polling (prevents script activity while working)
+^!Pause::ToggleManualPause()
 
 global LastPower := ""
 global LastRawPower := ""
@@ -33,9 +38,28 @@ global TxSessionSamples := []
 global LastValidPowerTime := 0
 global LastSessionEndTime := 0
 
+; Pause flag to avoid erratic mouse/activation when windows are missing
+global PausedDueToMissingWindows := false
+global ManualPaused := false
+
 CheckLogWindow() {
+    global PausedDueToMissingWindows
     global LastPower, LastRawPower, LastLogWindow, PowerSamples, OcrBusy, LastJTAlertPower
     global LastOutputPower, FiveSecondAverages, LastJTAlertBucket, TxSessionSamples, LastValidPowerTime, LastSessionEndTime
+
+    acomExe := "ahk_exe ACOM Director Plus.exe"
+    jtAlertExe := "ahk_exe JTAlertV2.exe"
+
+    ; If either required window is missing, pause the main polling to avoid clicks or activation.
+    if (!WinExist(acomExe) || !WinExist(jtAlertExe)) {
+        PausePolling()
+        return
+    }
+
+    ; If previously paused and both windows now exist, resume polling
+    if (PausedDueToMissingWindows) {
+        ResumePolling()
+    }
 
     logWindow := "ahk_exe wsjtx.exe"
     logTitle := "Log QSO"
@@ -46,7 +70,9 @@ CheckLogWindow() {
     actualPower := ""
     ; Once Log QSO is open it may cover ACOM, so only finish an OCR already running.
     if (!logIsActive || OcrBusy)
-        actualPower := ReadAcomPower()
+        ; Bring ACOM to the foreground briefly to ensure a reliable screen capture.
+        ; This may shift focus away from the user while OCR runs.
+        actualPower := ReadAcomPower(true)
     now := A_TickCount
     cutoff := now - 5000
 
@@ -83,12 +109,13 @@ CheckLogWindow() {
     averagePower := AveragePowerSamples(PowerSamples)
     outputPower := RollingPowerAverage(averagePower)
 
-    CoordMode("Mouse", "Client")
-    Click(txPowerX, txPowerY)
-    Send("^a")
-    SendText(outputPower)
-    destination := "WSJT-X TX Power"
-    AcomToolTip("ACOM 5-second average: " averagePower " W`nLast-two-sequence value: " outputPower " W`nWritten to: " destination, 1)
+    ; Write to JTAlert only. Do not send to WSJT-X.
+    if (WritePowerToJTAlert(outputPower)) {
+        destination := "JTAlert (Edit18)"
+        AcomToolTip("ACOM 5-second average: " averagePower " W`nLast-two-sequence value: " outputPower " W`nWritten to: " destination, 1)
+    } else {
+        AcomToolTip("ACOM 5-second average: " averagePower " W`nLast-two-sequence value: " outputPower " W`nJTAlert not found; not written.", 1)
+    }
     SetTimer(HidePowerTip, -3000)
     LastLogWindow := logWindowId
     PowerSamples := []
@@ -107,19 +134,18 @@ ShowPowerDiagnostic() {
 }
 
 TestTxPowerEntry() {
-    logWindow := "ahk_exe wsjtx.exe"
-    logTitle := "Log QSO"
-    if !WinActive(logWindow, logTitle) {
-        ToolTip("Open the WSJT-X Log QSO window first.", 10, 10, 2)
+    ; Test: write 50 W to JTAlert only (do not touch WSJT-X)
+    jtAlertWindow := "ahk_exe JTAlertV2.exe"
+    if !WinExist(jtAlertWindow) {
+        ToolTip("JTAlert not running. Cannot perform test.", 10, 10, 2)
         SetTimer(HidePowerDiagnostic, -3000)
         return
     }
-
-    CoordMode("Mouse", "Client")
-    Click(132, 138)
-    Send("^a")
-    SendText("50")
-    ToolTip("Test value 50 W entered into TX Power.", 10, 10, 2)
+    if (WritePowerToJTAlert(50)) {
+        ToolTip("Test value 50 W written to JTAlert.", 10, 10, 2)
+    } else {
+        ToolTip("Failed to write test value to JTAlert.", 10, 10, 2)
+    }
     SetTimer(HidePowerDiagnostic, -3000)
 }
 
@@ -193,8 +219,8 @@ ReadAcomPower(bringToFront := false, keepForeground := false) {
     }
 
     target := "ahk_id " acomWindows[1]
-    previousWindow := WinExist("A") ? WinGetID("A") : 0
-    OcrBusy := true
+    previousWindow := WinExist()
+
     OcrManual := bringToFront
     OcrKeepForeground := keepForeground
     OcrPreviousWindow := previousWindow
@@ -211,9 +237,8 @@ ReadAcomPower(bringToFront := false, keepForeground := false) {
             if !WinWaitActive(target,, 2)
                 throw Error("Could not activate ACOM Director Plus")
             Sleep(150)
-            CoordMode("Mouse", "Screen")
-            MouseMove(windowX + 165, windowY + 329, 0)
-            Sleep(750)
+            ; Do not move the mouse. Short delay to allow activation to settle.
+            Sleep(250)
             AcomToolTip("ACOM active.`nWindow: " windowX ", " windowY "`nCapture: " (windowX + 12) ", " (windowY + 318), 2)
         }
 
@@ -345,3 +370,58 @@ DumpAcomControls() {
     }
     SetTimer(HidePowerDiagnostic, -5000)
 }
+
+; --- Pause / Resume helpers and watcher ---
+
+PausePolling(manual := false) {
+    global PausedDueToMissingWindows, ManualPaused
+    if (PausedDueToMissingWindows)
+        return
+
+    PausedDueToMissingWindows := true
+    if (manual)
+        ManualPaused := true
+    SetTimer(CheckLogWindow, 0)     ; stop active polling (0 disables the timer)
+    SetTimer(CheckForWindows, 2000)     ; lightweight watcher every 2s
+    ToolTip("ACOM or JTAlert missing â€” polling paused", 10, 10, 1)
+    SetTimer(HidePowerTip, -3000)
+}
+
+ResumePolling(force := false) {
+    global PausedDueToMissingWindows, ManualPaused
+    if (!PausedDueToMissingWindows)
+        return
+    if (ManualPaused && !force)
+        return
+
+    PausedDueToMissingWindows := false
+    ManualPaused := false
+    SetTimer(CheckForWindows, 0)
+    SetTimer(CheckLogWindow, 1000)      ; restore original polling rate
+    ToolTip("", , , 1)                  ; clear polling tooltip
+}
+
+CheckForWindows() {
+    acomExe := "ahk_exe ACOM Director Plus.exe"
+    jtAlertExe := "ahk_exe JTAlertV2.exe"
+    if (WinExist(acomExe) && WinExist(jtAlertExe)) {
+        ; only resume automatically if user hasn't manually paused
+        if (!ManualPaused)
+            ResumePolling()
+    }
+}
+
+ToggleManualPause() {
+    global PausedDueToMissingWindows, ManualPaused
+    if (PausedDueToMissingWindows) {
+        ; resume forced by user
+        ResumePolling(true)
+        ToolTip("Polling resumed (manual)", 10, 10, 1)
+        SetTimer(HidePowerTip, -3000)
+    } else {
+        PausePolling(true)
+        ToolTip("Polling paused (manual)", 10, 10, 1)
+        SetTimer(HidePowerTip, -3000)
+    }
+}
+
