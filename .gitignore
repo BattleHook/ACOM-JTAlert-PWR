@@ -1,0 +1,15 @@
+# Visual Studio workspace
+.vs/
+
+# Build outputs
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+
+# OS files
+Thumbs.db
+Desktop.ini

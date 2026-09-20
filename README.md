@@ -19,6 +19,15 @@ The working test setup used:
 
 The ACOM and JTAlert product versions were not pinned. The script depends on their executable names, the ACOM window layout, and the JTAlert control name below. Application updates or Windows display-scaling changes may require retesting.
 
+## Confirmed ACOM Director Plus version
+
+Tested and confirmed with ACOM Director Plus Version 0.7.5.0. 
+No changes to the AutoHotkey or PowerShell helper scripts were required to run with this version.
+
+Recommended ACOM settings:
+- View type: "Modern - Full Panel"
+- Enable: "Keep on Top"
+
 ## Files and installation
 
 Keep these files together:
