@@ -35,6 +35,10 @@ Keep these files together:
 - `ACOM-JTAlert-PWR.ahk` - main AutoHotkey v2 script.
 - `Read-ACOM-Power.ps1` - screenshot capture and Tesseract OCR helper.
 
+Note: this repository contains the AutoHotkey v2 source script (`ACOM-JTAlert-PWR.ahk`).
+There is no compiled `ACOM-JTAlert-PWR.exe` included. If you prefer a standalone
+executable, you may compile the script yourself using the optional Ahk2Exe compiler (see below).
+
 1. Install AutoHotkey v2, ACOM Director Plus, JTAlert V2, and Tesseract OCR.
 2. Copy both project files to one directory.
 3. Start ACOM Director Plus and JTAlert V2.
