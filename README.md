@@ -77,6 +77,13 @@ The tested JTAlert workflow updates once per completed transmission session, not
 - JTAlert is not rewritten when the average is unchanged.
 - A five-second quiet guard prevents an immediate stale reading from starting another session.
 
+**Note - low OCR readings below 10 W**
+
+- Readings below 10 W cannot start a transmission session.
+- Readings below 10 W cannot extend an active transmission session.
+- Readings below 10 W cannot overwrite the JTAlert PWR field.
+- Readings below 10 W are also treated as possible OCR results where the leading digit was missed.
+
 ## JTAlert target
 
 The confirmed output target is:
