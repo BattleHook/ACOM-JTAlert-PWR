@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 #SingleInstance Force
 
 DEBUG := false
@@ -33,10 +33,10 @@ global LastOutputPower := ""
 global FiveSecondSamples := []
 global FiveSecondAverages := []
 global FiveSecondStart := 0
-global LastJTAlertBucket := 0
 global TxSessionSamples := []
 global LastValidPowerTime := 0
 global LastSessionEndTime := 0
+global MinimumTransmitPower := 10
 
 ; Pause flag to avoid erratic mouse/activation when windows are missing
 global PausedDueToMissingWindows := false
@@ -45,7 +45,8 @@ global ManualPaused := false
 CheckLogWindow() {
     global PausedDueToMissingWindows
     global LastPower, LastRawPower, LastLogWindow, PowerSamples, OcrBusy, LastJTAlertPower
-    global LastOutputPower, FiveSecondAverages, LastJTAlertBucket, TxSessionSamples, LastValidPowerTime, LastSessionEndTime
+    global LastOutputPower, FiveSecondAverages, TxSessionSamples, LastValidPowerTime, LastSessionEndTime
+    global MinimumTransmitPower
 
     acomExe := "ahk_exe ACOM Director Plus.exe"
     jtAlertExe := "ahk_exe JTAlertV2.exe"
@@ -70,9 +71,8 @@ CheckLogWindow() {
     actualPower := ""
     ; Once Log QSO is open it may cover ACOM, so only finish an OCR already running.
     if (!logIsActive || OcrBusy)
-        ; Bring ACOM to the foreground briefly to ensure a reliable screen capture.
-        ; This may shift focus away from the user while OCR runs.
-        actualPower := ReadAcomPower(true)
+        ; Normal polling must not activate ACOM or interrupt keyboard input.
+        actualPower := ReadAcomPower()
     now := A_TickCount
     cutoff := now - 5000
 
@@ -85,40 +85,25 @@ CheckLogWindow() {
         LastPower := cleanPower
         numericPower := ParsePowerDigits(cleanPower)
         PowerSamples.Push({time: now, value: numericPower})
-        if (numericPower > 0 && numericPower <= 700 && (!LastSessionEndTime || now - LastSessionEndTime >= 5000)) {
+        ; Ignore residual power and OCR results with a dropped leading digit.
+        ; These values must not start or extend a transmit session.
+        if (numericPower >= MinimumTransmitPower && numericPower <= 700 && (!LastSessionEndTime || now - LastSessionEndTime >= 5000)) {
             TxSessionSamples.Push(numericPower)
+            AddTransmitReading(now, numericPower)
             LastValidPowerTime := now
         }
     }
 
-    if (TxSessionSamples.Length && LastValidPowerTime && now - LastValidPowerTime >= 2000) {
+    ; Do not end a session while its next OCR result is still pending. The extra
+    ; margin also prevents a single slow or empty OCR cycle from splitting TX.
+    if (TxSessionSamples.Length && LastValidPowerTime && !OcrBusy && now - LastValidPowerTime >= 3500) {
         FinalizeTransmitSession()
         LastValidPowerTime := 0
         LastSessionEndTime := now
     }
 
-    if !logIsActive {
+    if !logIsActive
         LastLogWindow := 0
-        return
-    }
-
-    logWindowId := WinGetID(logWindow)
-    if (logWindowId = LastLogWindow || !PowerSamples.Length)
-        return
-
-    averagePower := AveragePowerSamples(PowerSamples)
-    outputPower := RollingPowerAverage(averagePower)
-
-    ; Write to JTAlert only. Do not send to WSJT-X.
-    if (WritePowerToJTAlert(outputPower)) {
-        destination := "JTAlert (Edit18)"
-        AcomToolTip("ACOM 5-second average: " averagePower " W`nLast-two-sequence value: " outputPower " W`nWritten to: " destination, 1)
-    } else {
-        AcomToolTip("ACOM 5-second average: " averagePower " W`nLast-two-sequence value: " outputPower " W`nJTAlert not found; not written.", 1)
-    }
-    SetTimer(HidePowerTip, -3000)
-    LastLogWindow := logWindowId
-    PowerSamples := []
 }
 
 HidePowerTip() {
@@ -174,30 +159,36 @@ ReadAcomPower(bringToFront := false, keepForeground := false) {
             if (A_TickCount - OcrStartedAt < 30000)
                 return ""
             ProcessClose(OcrPid)
+            OcrBusy := false
+            OcrPid := 0
             DebugTrace("OCR watchdog timeout`n", traceFile)
+            return ""
         }
+
         if !FileExist(outputFile) {
             OcrBusy := false
             OcrPid := 0
             return ""
         }
+
         try {
             result := RegExReplace(FileRead(outputFile), "\s", "")
             FileDelete(outputFile)
         } catch {
             return ""
         }
+
         if !RegExMatch(result, "^\d{1,3}$") {
             DebugTrace("OCR rejected out-of-range value: [" result "]`n", traceFile)
             result := ""
-        }
-        else {
+        } else {
             numericResult := ParsePowerDigits(result)
             if (numericResult > 700) {
                 DebugTrace("OCR rejected out-of-range value: [" result "]`n", traceFile)
                 result := ""
             }
         }
+
         OcrBusy := false
         OcrPid := 0
         DebugTrace("OCR completed: [" result "]`n", traceFile)
@@ -251,6 +242,7 @@ ReadAcomPower(bringToFront := false, keepForeground := false) {
         Run(command,, "Hide", &ocrPid)
         OcrPid := ocrPid
         OcrStartedAt := A_TickCount
+        OcrBusy := true
         return ""
     } catch as error {
         DebugTrace("OCR error: " error.Message "`n", traceFile)
@@ -289,7 +281,11 @@ AddTransmitReading(now, value) {
         FiveSecondSamples := []
         FiveSecondStart := now
     }
-    return FiveSecondSamples.Length ? AverageNumbers(FiveSecondSamples) : FiveSecondAverages[FiveSecondAverages.Length].value
+    if FiveSecondSamples.Length
+        return AverageNumbers(FiveSecondSamples)
+    if FiveSecondAverages.Length
+        return FiveSecondAverages[FiveSecondAverages.Length].value
+    return 0
 }
 
 AveragePowerSamples(samples) {
@@ -311,6 +307,44 @@ RollingPowerAverage(fiveSecondAverage) {
     return AverageNumbers(values)
 }
 
+CurrentTransmitAverages() {
+    global FiveSecondSamples, FiveSecondAverages
+
+    fiveSecondValues := []
+    for bucket in FiveSecondAverages
+        fiveSecondValues.Push(bucket.value)
+
+    currentFiveSecondAverage := FiveSecondSamples.Length ? AverageNumbers(FiveSecondSamples) : 0
+    if (currentFiveSecondAverage > 0)
+        fiveSecondValues.Push(currentFiveSecondAverage)
+
+    while (fiveSecondValues.Length > 12)
+        fiveSecondValues.RemoveAt(1)
+
+    fifteenSecondValues := []
+    group := []
+    for value in fiveSecondValues {
+        group.Push(value)
+        if (group.Length = 3) {
+            fifteenSecondValues.Push(AverageNumbers(group))
+            group := []
+        }
+    }
+    if group.Length
+        fifteenSecondValues.Push(AverageNumbers(group))
+
+    while (fifteenSecondValues.Length > 4)
+        fifteenSecondValues.RemoveAt(1)
+
+    return {
+        fiveSecond: currentFiveSecondAverage,
+        fifteenSecond: fifteenSecondValues.Length ? fifteenSecondValues[fifteenSecondValues.Length] : 0,
+        final: AverageNumbers(fifteenSecondValues),
+        fiveSecondBuckets: fiveSecondValues.Length,
+        fifteenSecondBuckets: fifteenSecondValues.Length
+    }
+}
+
 AverageNumbers(values) {
     if !values.Length
         return 0
@@ -321,15 +355,21 @@ AverageNumbers(values) {
 }
 
 FinalizeTransmitSession() {
-    global TxSessionSamples, LastJTAlertPower
+    global TxSessionSamples, LastJTAlertPower, FiveSecondSamples, FiveSecondAverages, FiveSecondStart
 
+    averages := CurrentTransmitAverages()
+    ; Weight every accepted OCR reading equally. Averaging partially filled
+    ; time buckets equally can pull the result down near the end of a TX.
     sessionPower := AverageNumbers(TxSessionSamples)
     if (sessionPower > 0 && sessionPower <= 700 && sessionPower != LastJTAlertPower && WritePowerToJTAlert(sessionPower)) {
         LastJTAlertPower := sessionPower
-        AcomToolTip("Transmission ended.`nJTAlert value: " sessionPower " W`nSamples: " TxSessionSamples.Length, 1)
+        AcomToolTip("Transmission ended.`n5-second average: " averages.fiveSecond " W`n15-second average: " averages.fifteenSecond " W`nJTAlert value: " sessionPower " W`nSamples: " TxSessionSamples.Length, 1)
         SetTimer(HidePowerTip, -2500)
     }
     TxSessionSamples := []
+    FiveSecondSamples := []
+    FiveSecondAverages := []
+    FiveSecondStart := 0
 }
 
 WritePowerToJTAlert(power) {
@@ -424,4 +464,3 @@ ToggleManualPause() {
         SetTimer(HidePowerTip, -3000)
     }
 }
-
