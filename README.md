@@ -4,6 +4,10 @@ Fills JTAlert PWR Field with average TX PWR (Needs AutoHotkey and ACOM-Director-
 
 This AutoHotkey v2 tool reads the Forward Power value displayed by ACOM Director Plus with OCR, averages the readings for a completed transmission session, and writes the result to the JTAlert PWR field.
 
+# About
+
+Support BattleHook on Ko-fi: https://ko-fi.com/battlehook
+
 ## Tested configuration
 
 The working test setup used:
